@@ -6,52 +6,28 @@
 /*   By: museker <museker@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/09/11 22:44:54 by museker           #+#    #+#             */
-/*   Updated: 2023/09/12 11:59:22 by museker          ###   ########.fr       */
+/*   Updated: 2023/09/15 16:08:34 by museker          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "philo.h"
 
-long long	get_time(void)
+void	set_philosophers(t_info *info)
 {
-	struct timeval		tv;
-	unsigned long long	time;
-
-	gettimeofday(&tv, NULL);
-	time = tv.tv_sec * 1000 + tv.tv_usec / 1000;
-	return (time);
-}
-
-long long	get_time_passed(t_info *ph)
-{
-	return (get_time() - ph->start_time);
-}
-
-t_philo	*set_philosophers(t_info *info)
-{
-	t_philo	*first;
-	t_philo	*temp;
 	int		i;
 
 	i = 0;
-	first = malloc(sizeof(t_philo));
-	first->id = ++i;
-	first->last_meal = 9999999999999;
-	pthread_mutex_init(&first->mutex_fork, NULL);
-	first->info = info;
-	temp = first;
-	while (i < info->number_philo)
+	info->philos = malloc(sizeof(t_philo) * info->number_philo);
+	info->forks = malloc(sizeof(pthread_mutex_t) * info->number_philo);
+	i = -1;
+	while (++i < info->number_philo)
 	{
 		usleep(100);
-		temp->left = malloc(sizeof(t_philo));
-		temp->left->id = ++i;
-		temp->left->last_meal = 9223372036854775807LL;
-		pthread_mutex_init(&temp->left->mutex_fork, NULL);
-		temp->left->info = info;
-		temp = temp->left;
+		info->philos[i].id = i;
+		info->philos[i].last_meal = 0;
+		info->philos[i].info = info;
+		pthread_mutex_init(&info->forks[i], NULL);
 	}
-	temp->left = first;
-	return (first);
 }
 
 t_info	*set_info(int argc, char *argv[])
@@ -63,40 +39,54 @@ t_info	*set_info(int argc, char *argv[])
 	info->time_to_die = ft_atoi(argv[2]);
 	info->time_to_eat = ft_atoi(argv[3]);
 	info->time_to_sleep = ft_atoi(argv[4]);
-	info->must_eat_flag = 0;
+	info->start_time = get_ms(info);
+	info->eat_count = 0;
 	pthread_mutex_init(&info->mutex_dead, NULL);
+	pthread_mutex_init(&info->eaten, NULL);
 	if (argc == 6)
-	{
-		info->must_eat_flag = 1;
 		info->number_must_eat = ft_atoi(argv[5]);
-	}
+	else
+		info->number_must_eat = -1;
 	return (info);
+}
+
+void	main_thread(t_info *info)
+{
+	int	i;
+
+	i = 0;
+	while (1)
+	{
+		usleep(100);
+		pthread_mutex_lock(&info->eaten);
+		if (info->number_must_eat != -1
+			&& info->eat_count >= info->number_must_eat
+			* info->number_philo)
+		{
+			pthread_mutex_lock(&info->mutex_dead);
+			return ;
+		}
+		if (get_ms(info) - info->philos[i % info->number_philo].last_meal
+			>= info->time_to_die)
+		{
+			pthread_mutex_lock(&info->mutex_dead);
+			printf("%lu %d died\n", get_ms(info), (i % info->number_philo) + 1);
+			return ;
+		}
+		pthread_mutex_unlock(&info->eaten);
+		if (i == info->number_philo)
+			i = 0;
+	}
 }
 
 int	main(int argc, char *argv[])
 {
 	t_info	*info;
-	t_philo	*first;
 
-	if (argc != 5 && argc != 6)
-		return (0);
+	if ((argc != 5 && argc != 6) || check_arguman(argv + 1) == -1)
+		return (1);
 	info = set_info(argc, argv);
-	first = set_philosophers(info);
-	info->start_time = get_time();
-	start_thread(first, info);
-	int i = 0;
-	while (1)
-	{
-		i++;
-		usleep(100);
-		if ((get_time() - first->last_meal) > first->info->time_to_die)
-		{
-			pthread_mutex_lock(&first->info->mutex_dead);
-			printf("%lld %d died\n", get_time_passed(first->info), i % first->info->number_philo);
-			pthread_mutex_unlock(&first->info->mutex_dead);
-			exit(1);
-		}
-	}
-	// join_thread(first, info);
-	check_dead(first, info);
+	set_philosophers(info);
+	start_thread(info);
+	main_thread(info);
 }
