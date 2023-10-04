@@ -2,7 +2,7 @@ NAME	=	philo
 SRC		=	ft_atoi.c philo.c utils.c
 OBJS 	= 	$(SRC:.c=.o)
 CC 		= 	@gcc
-CFLAGS 	= 	-Wall -Wextra -Werror -g
+CFLAGS 	= 	-Wall -Wextra -Werror
 RM	 	= 	rm -rf
 
 $(NAME): $(OBJS)
